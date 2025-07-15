@@ -1,0 +1,105 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Contact {
+  id        Int      @id @default(autoincrement())
+  name      String
+  phone     String   @unique
+  email     String?
+  optedOut  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  messages                Message[]
+  contactListMemberships  ContactListMembership[]
+
+  @@map("contacts")
+}
+
+model ContactList {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  contacts              ContactListMembership[]
+  campaignTargetLists   CampaignTargetList[]
+
+  @@map("contact_lists")
+}
+
+model ContactListMembership {
+  id            Int @id @default(autoincrement())
+  contactId     Int
+  contactListId Int
+
+  // Relations
+  contact     Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  contactList ContactList @relation(fields: [contactListId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, contactListId])
+  @@map("contact_list_memberships")
+}
+
+model Message {
+  id         Int      @id @default(autoincrement())
+  twilioSid  String   @unique
+  from       String
+  to         String
+  body       String
+  direction  String   // 'inbound' | 'outbound'
+  status     String   // 'pending' | 'delivered' | 'failed' | 'received'
+  timestamp  DateTime @default(now())
+  contactId  Int?
+  campaignId Int?
+
+  // Relations
+  contact  Contact?  @relation(fields: [contactId], references: [id])
+  campaign Campaign? @relation(fields: [campaignId], references: [id])
+
+  @@map("messages")
+}
+
+model Campaign {
+  id             Int      @id @default(autoincrement())
+  name           String
+  message        String
+  status         String   @default("draft") // 'draft' | 'sending' | 'completed' | 'failed'
+  sentCount      Int      @default(0)
+  deliveredCount Int      @default(0)
+  failedCount    Int      @default(0)
+  optOutCount    Int      @default(0)
+  createdAt      DateTime @default(now())
+  sentAt         DateTime?
+
+  // Relations
+  messages     Message[]
+  targetLists  CampaignTargetList[]
+
+  @@map("campaigns")
+}
+
+model CampaignTargetList {
+  id            Int @id @default(autoincrement())
+  campaignId    Int
+  contactListId Int
+
+  // Relations
+  campaign    Campaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contactList ContactList @relation(fields: [contactListId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, contactListId])
+  @@map("campaign_target_lists")
+}
