@@ -301,19 +301,50 @@ app.post('/api/contacts/upload', upload.single('csv'), async (req, res) => {
   try {
     const { listId } = req.body;
     const contacts = [];
+    let skippedRows = 0;
+    let rowCount = 0;
+
+    console.log('Starting CSV upload for list:', listId);
 
     fs.createReadStream(req.file.path)
       .pipe(csv())
       .on('data', (row) => {
-        // Expect CSV with columns: name, phone, email
-        if (row.name && row.phone) {
+        rowCount++;
+        // Debug first few rows
+        if (rowCount <= 3) {
+          console.log('Row', rowCount, ':', row);
+        }
+        
+        // Try to find phone number in various possible column names
+        const phone = row.phone || row.Phone || row.PHONE || 
+                     row.mobile || row.Mobile || row.MOBILE ||
+                     row.number || row.Number || row.NUMBER ||
+                     row.cell || row.Cell || row.CELL ||
+                     Object.values(row).find(val => val && val.toString().match(/^\+?\d{10,}$/));
+        
+        // Try to find name in various possible column names
+        const name = row.name || row.Name || row.NAME || 
+                    row.firstname || row.first_name || row['First Name'] ||
+                    row.lastname || row.last_name || row['Last Name'] ||
+                    row.fullname || row['Full Name'] || 'Contact ' + rowCount;
+        
+        if (phone) {
           contacts.push({
-            name: row.name.trim(),
-            phone: row.phone.trim(),
-            email: row.email ? row.email.trim() : null,
+            name: name ? name.toString().trim() : 'Contact ' + rowCount,
+            phone: phone.toString().trim(),
+            email: row.email || row.Email || row.EMAIL || null,
             optedOut: false
           });
+        } else {
+          skippedRows++;
+          if (skippedRows <= 5) {
+            console.log('Skipped row', rowCount, '- no phone found:', row);
+          }
         }
+      })
+      .on('error', (error) => {
+        console.error('CSV parsing error:', error);
+        res.status(500).json({ error: 'Failed to parse CSV file' });
       })
       .on('end', async () => {
         try {
@@ -367,9 +398,13 @@ app.post('/api/contacts/upload', upload.single('csv'), async (req, res) => {
             listId: parseInt(listId) 
           });
 
+          console.log(`CSV Upload Complete: ${createdContacts.length} contacts processed, ${skippedRows} rows skipped out of ${rowCount} total rows`);
+          
           res.json({ 
             success: true, 
-            contactsProcessed: createdContacts.length 
+            contactsProcessed: createdContacts.length,
+            totalRows: rowCount,
+            skippedRows: skippedRows
           });
         } catch (dbError) {
           console.error('Database error during CSV upload:', dbError);
