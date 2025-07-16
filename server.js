@@ -477,6 +477,46 @@ app.patch('/api/contacts/:id/opt-out', async (req, res) => {
   }
 });
 
+// Delete contact
+app.delete('/api/contacts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    await prisma.contact.delete({
+      where: { id: parseInt(id) }
+    });
+    
+    io.emit('contact_deleted', { id: parseInt(id) });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting contact:', error);
+    res.status(500).json({ error: 'Failed to delete contact' });
+  }
+});
+
+// Delete contact list
+app.delete('/api/contact-lists/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Delete all memberships first
+    await prisma.contactListMembership.deleteMany({
+      where: { contactListId: parseInt(id) }
+    });
+    
+    // Then delete the list
+    await prisma.contactList.delete({
+      where: { id: parseInt(id) }
+    });
+    
+    io.emit('list_deleted', { id: parseInt(id) });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting list:', error);
+    res.status(500).json({ error: 'Failed to delete list' });
+  }
+});
+
 // ===== TWILIO WEBHOOKS =====
 
 // Incoming SMS webhook
