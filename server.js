@@ -40,6 +40,16 @@ io.on('connection', (socket) => {
 
 // ===== API ROUTES =====
 
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
+
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({ message: 'SMS Platform API is running' });
+});
+
 // Get all messages
 app.get('/api/messages', async (req, res) => {
   try {
