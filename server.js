@@ -318,6 +318,9 @@ app.post('/api/contact-lists', async (req, res) => {
 
 // Upload contacts CSV
 app.post('/api/contacts/upload', upload.single('csv'), async (req, res) => {
+  // Extend timeout for large uploads
+  req.setTimeout(300000); // 5 minutes
+  
   try {
     const { listId } = req.body;
     const contacts = [];
@@ -368,9 +371,18 @@ app.post('/api/contacts/upload', upload.single('csv'), async (req, res) => {
       })
       .on('end', async () => {
         try {
-          // Create contacts
-          const createdContacts = await Promise.all(
-            contacts.map(async (contactData) => {
+          console.log(`Processing ${contacts.length} contacts...`);
+          
+          // Process in batches to avoid timeouts
+          const batchSize = 100;
+          const createdContacts = [];
+          
+          for (let i = 0; i < contacts.length; i += batchSize) {
+            const batch = contacts.slice(i, i + batchSize);
+            console.log(`Processing batch ${Math.floor(i/batchSize) + 1} of ${Math.ceil(contacts.length/batchSize)}`);
+            
+            const batchResults = await Promise.all(
+              batch.map(async (contactData) => {
               // Check if contact already exists
               const existing = await prisma.contact.findUnique({
                 where: { phone: contactData.phone }
@@ -408,6 +420,9 @@ app.post('/api/contacts/upload', upload.single('csv'), async (req, res) => {
               }
             })
           );
+          
+          createdContacts.push(...batchResults);
+        }
 
           // Clean up uploaded file
           fs.unlinkSync(req.file.path);
