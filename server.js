@@ -281,18 +281,38 @@ app.post('/api/contact-lists', async (req, res) => {
   try {
     const { name, description } = req.body;
     
-    const list = await prisma.contactList.create({
-      data: {
-        name: name.toLowerCase().replace(/\s+/g, '_'),
-        description: description
-      }
+    // Check if list name already exists
+    const existingList = await prisma.contactList.findUnique({
+      where: { name: name.toLowerCase().replace(/\s+/g, '_') }
     });
-
-    io.emit('contact_list_created', list);
-    res.json(list);
+    
+    if (existingList) {
+      // Add timestamp to make it unique
+      const uniqueName = `${name.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}`;
+      const list = await prisma.contactList.create({
+        data: {
+          name: uniqueName,
+          description: description
+        }
+      });
+      io.emit('contact_list_created', list);
+      res.json(list);
+    } else {
+      const list = await prisma.contactList.create({
+        data: {
+          name: name.toLowerCase().replace(/\s+/g, '_'),
+          description: description
+        }
+      });
+      io.emit('contact_list_created', list);
+      res.json(list);
+    }
   } catch (error) {
     console.error('Error creating contact list:', error);
-    res.status(500).json({ error: 'Failed to create contact list' });
+    const errorMessage = error.code === 'P2002' 
+      ? 'A list with this name already exists' 
+      : 'Failed to create contact list';
+    res.status(500).json({ error: errorMessage, details: error.message });
   }
 });
 
